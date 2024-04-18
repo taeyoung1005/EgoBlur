@@ -68,22 +68,6 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--input_image_path",
-        required=False,
-        type=str,
-        default=None,
-        help="Absolute path for the given image on which we want to make detections",
-    )
-
-    parser.add_argument(
-        "--output_image_path",
-        required=False,
-        type=str,
-        default=None,
-        help="Absolute path where we want to store the visualized image",
-    )
-
-    parser.add_argument(
         "--input_video_path",
         required=False,
         type=str,
@@ -157,40 +141,25 @@ def validate_inputs(args: argparse.Namespace) -> argparse.Namespace:
         raise ValueError(
             "Please provide either face_model_path or lp_model_path or both"
         )
-    if args.input_image_path is None and args.input_video_path is None:
-        raise ValueError("Please provide either input_image_path or input_video_path")
-    if args.input_image_path is not None and args.output_image_path is None:
-        raise ValueError(
-            "Please provide output_image_path for the visualized image to save."
-        )
+    if args.input_video_path is None:
+        raise ValueError("Please provide either input_video_path")
+
     if args.input_video_path is not None and args.output_video_path is None:
         raise ValueError(
             "Please provide output_video_path for the visualized video to save."
         )
-    if args.input_image_path is not None and not os.path.exists(args.input_image_path):
-        raise ValueError(f"{args.input_image_path} does not exist.")
+
     if args.input_video_path is not None and not os.path.exists(args.input_video_path):
         raise ValueError(f"{args.input_video_path} does not exist.")
     if args.face_model_path is not None and not os.path.exists(args.face_model_path):
         raise ValueError(f"{args.face_model_path} does not exist.")
     if args.lp_model_path is not None and not os.path.exists(args.lp_model_path):
         raise ValueError(f"{args.lp_model_path} does not exist.")
-    if args.output_image_path is not None and not os.path.exists(
-        os.path.dirname(args.output_image_path)
-    ):
-        create_output_directory(args.output_image_path)
     if args.output_video_path is not None and not os.path.exists(
         os.path.dirname(args.output_video_path)
     ):
         create_output_directory(args.output_video_path)
 
-    # check we have write permissions on output paths
-    if args.output_image_path is not None and not os.access(
-        os.path.dirname(args.output_image_path), os.W_OK
-    ):
-        raise ValueError(
-            f"You don't have permissions to write to {args.output_image_path}. Please grant adequate permissions, or provide a different output path."
-        )
     if args.output_video_path is not None and not os.access(
         os.path.dirname(args.output_video_path), os.W_OK
     ):
@@ -211,25 +180,6 @@ def get_device() -> str:
         if not torch.cuda.is_available()
         else f"cuda:{torch.cuda.current_device()}"
     )
-
-
-def read_image(image_path: str) -> np.ndarray:
-    """
-    parameter image_path: absolute path to an image
-    Return an image in BGR format
-    """
-    bgr_image = cv2.imread(image_path)
-    if len(bgr_image.shape) == 2:
-        bgr_image = cv2.cvtColor(bgr_image, cv2.COLOR_GRAY2BGR)
-    return bgr_image
-
-
-def write_image(image: np.ndarray, image_path: str) -> None:
-    """
-    parameter image: np.ndarray in BGR format
-    parameter image_path: absolute path where we want to save the visualized image
-    """
-    cv2.imwrite(image_path, image)
 
 
 def get_image_tensor(bgr_image: np.ndarray) -> torch.Tensor:
@@ -340,63 +290,6 @@ def visualize(
     return image
 
 
-def visualize_image(
-    input_image_path: str,
-    face_detector: torch.jit._script.RecursiveScriptModule,
-    lp_detector: torch.jit._script.RecursiveScriptModule,
-    face_model_score_threshold: float,
-    lp_model_score_threshold: float,
-    nms_iou_threshold: float,
-    output_image_path: str,
-    scale_factor_detections: float,
-):
-    """
-    parameter input_image_path: absolute path to the input image
-    parameter face_detector: face detector model to perform face detections
-    parameter lp_detector: face detector model to perform face detections
-    parameter face_model_score_threshold: face model score threshold to filter out low confidence detection
-    parameter lp_model_score_threshold: license plate model score threshold to filter out low confidence detection
-    parameter nms_iou_threshold: NMS iou threshold
-    parameter output_image_path: absolute path where the visualized image will be saved
-    parameter scale_factor_detections: scale detections by the given factor to allow blurring more area
-
-    Perform detections on the input image and save the output image at the given path.
-    """
-    bgr_image = read_image(input_image_path)
-    image = bgr_image.copy()
-
-    image_tensor = get_image_tensor(bgr_image)
-    image_tensor_copy = image_tensor.clone()
-    detections = []
-    # get face detections
-    if face_detector is not None:
-        detections.extend(
-            get_detections(
-                face_detector,
-                image_tensor,
-                face_model_score_threshold,
-                nms_iou_threshold,
-            )
-        )
-
-    # get license plate detections
-    if lp_detector is not None:
-        detections.extend(
-            get_detections(
-                lp_detector,
-                image_tensor_copy,
-                lp_model_score_threshold,
-                nms_iou_threshold,
-            )
-        )
-    image = visualize(
-        image,
-        detections,
-        scale_factor_detections,
-    )
-    write_image(image, output_image_path)
-
-
 def visualize_video(
     input_video_path: str,
     face_detector: torch.jit._script.RecursiveScriptModule,
@@ -467,10 +360,31 @@ def visualize_video(
         video_writer_clip.close()
 
 
-if __name__ == "__main__":
-    from time import time
-    start_time = time()
-    args = validate_inputs(parse_args())
+def main(input_video_path, output_video_path):
+    # 사용자 입력을 통해 매개변수 설정
+    face_model_path = "models/ego_blur_face.jit"
+    face_model_score_threshold = 0.9
+    lp_model_path = "models/ego_blur_lp.jit"
+    lp_model_score_threshold = 0.9
+    nms_iou_threshold = 0.3
+    scale_factor_detections = 1.0
+    output_video_fps = 30
+
+    # 매개변수 설정
+    args = argparse.Namespace(
+        face_model_path=face_model_path,
+        face_model_score_threshold=face_model_score_threshold,
+        lp_model_path=lp_model_path,
+        lp_model_score_threshold=lp_model_score_threshold,
+        nms_iou_threshold=nms_iou_threshold,
+        scale_factor_detections=scale_factor_detections,
+        input_video_path=input_video_path,
+        output_video_path=output_video_path,
+        output_video_fps=output_video_fps,
+    )
+
+    # 입력값 검증 및 실행
+    args = validate_inputs(args)
     if args.face_model_path is not None:
         face_detector = torch.jit.load(args.face_model_path, map_location="cpu").to(
             get_device()
@@ -487,19 +401,6 @@ if __name__ == "__main__":
     else:
         lp_detector = None
 
-    if args.input_image_path is not None:
-
-        image = visualize_image(
-            args.input_image_path,
-            face_detector,
-            lp_detector,
-            args.face_model_score_threshold,
-            args.lp_model_score_threshold,
-            args.nms_iou_threshold,
-            args.output_image_path,
-            args.scale_factor_detections,
-        )
-
     if args.input_video_path is not None:
         visualize_video(
             args.input_video_path,
@@ -512,5 +413,3 @@ if __name__ == "__main__":
             args.scale_factor_detections,
             args.output_video_fps,
         )
-
-    print(f"Total time taken: {time() - start_time:.2f} seconds")
