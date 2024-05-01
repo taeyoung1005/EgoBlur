@@ -30,5 +30,3 @@ RUN pip install "uvicorn[standard]"
 RUN pip install gunicorn
 
 RUN pip install -r /workspace/requirements.txt
-
-CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "--access-logfile", "./gunicorn-access.log", "main:app", "--bind", "0.0.0.0:8383", "--workers", "4", "--timeout", "600", "--log-level", "debug"]

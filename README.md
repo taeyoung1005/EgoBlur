@@ -125,6 +125,20 @@ python3 script/demo_ego_blur.py --face_model_path ./ego_blur_face.jit --input_im
 python3 script/demo_ego_blur.py --face_model_path ./ego_blur_face.jit --input_video_path demo_assets/test_video.mp4 --output_video_path ./test_video_output.mp4
 ```
 
+### docker-compose fastapi command example
+
+#### demo command for start blurring server
+
+```
+# docker-compose
+docker-compose up --build
+```
+
+#### demo command for stop blurring server
+```
+# docker-compose
+docker-compose down
+```
 
 ## License
 

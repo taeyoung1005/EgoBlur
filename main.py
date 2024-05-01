@@ -10,9 +10,11 @@ app = FastAPI()
 
 @app.post("/egoblur")
 async def video_blur(video: UploadFile = File(...)):
-    video_input_path = f"input_video/{video.filename}"
+    video_input_path = f"input_video/{vide  o.filename}"
+
     with open(video_input_path, "wb") as buffer:
         buffer.write(video.file.read())
+
     video_output_path = f"output_video/{video.filename.split('.')[0]}_output.mp4"
     egoblur_video_main(video_input_path, video_output_path)
 
